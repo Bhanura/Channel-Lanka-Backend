@@ -61,7 +61,7 @@ const createRoom = async (userId, centerId, { name, charge }) => {
 const getRegisteredDoctors = async (centerId) => {
   const { data, error } = await supabaseAdmin
     .from('registered_doctors')
-    .select('*, doctors(name, specialization, avatar_url, verification_status)')
+    .select('*, doctors(user_id, name, specialization, avatar_url, verification_status)')
     .eq('center_id', centerId);
   if (error) throw { statusCode: 500, message: error.message };
   return data;
