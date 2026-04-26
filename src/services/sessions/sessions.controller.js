@@ -23,5 +23,12 @@ const getAvailableSessions = async (req, res, next) => {
   try { res.json({ data: await svc.getAvailableSessions(req.query) }); }
   catch (e) { next(e); }
 };
+const cancelSessionByDoctor = async (req, res, next) => {
+  try {
+    const { reason } = req.body;
+    if (!reason) throw { statusCode: 400, message: 'Cancellation reason is required' };
+    res.json({ message: 'Session cancelled successfully', data: await svc.cancelSessionByDoctor(req.user.user_id, req.params.sessionId, reason) });
+  } catch (e) { next(e); }
+};
 
-module.exports = { createSession, getCenterSessions, getSessionDetail, updateSession, getAvailableSessions };
+module.exports = { createSession, getCenterSessions, getSessionDetail, updateSession, getAvailableSessions, cancelSessionByDoctor };

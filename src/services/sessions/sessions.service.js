@@ -3,6 +3,7 @@
  * Manages channel sessions (scheduling doctor visits at centers).
  */
 const { supabaseAdmin } = require('../../config/supabase');
+const notificationsService = require('../notifications/notifications.service');
 
 /** Create a new session (center admin only) */
 const createSession = async (userId, centerId, sessionData) => {
@@ -126,4 +127,102 @@ const getAvailableSessions = async ({ doctorId, centerId, date, specialization }
     }));
 };
 
-module.exports = { createSession, getCenterSessions, getSessionDetail, updateSession, getAvailableSessions };
+/** Cancel session by doctor */
+const cancelSessionByDoctor = async (userId, sessionId, reason) => {
+  // 1. Get doctor details
+  const { data: doctor } = await supabaseAdmin
+    .from('doctors').select('doctor_id, name').eq('user_id', userId).single();
+  if (!doctor) throw { statusCode: 403, message: 'Doctor not found' };
+
+  // 2. Get session details
+  const { data: session } = await supabaseAdmin
+    .from('channel_sessions')
+    .select('*, rooms(center_id, channeling_centers(name, created_by))')
+    .eq('session_id', sessionId)
+    .single();
+
+  if (!session) throw { statusCode: 404, message: 'Session not found' };
+  if (session.doctor_id !== doctor.doctor_id) throw { statusCode: 403, message: 'Not authorized to cancel this session' };
+  if (session.status === 'cancelled') throw { statusCode: 400, message: 'Session is already cancelled' };
+
+  // 3. Update session status
+  const { data: updatedSession, error: updateErr } = await supabaseAdmin
+    .from('channel_sessions')
+    .update({ status: 'cancelled' })
+    .eq('session_id', sessionId)
+    .select()
+    .single();
+
+  if (updateErr) throw { statusCode: 500, message: updateErr.message };
+
+  // 4. Cancel all appointments and refund payments
+  const { data: appointments } = await supabaseAdmin
+    .from('appointments')
+    .select('appointment_id, patient_id, payment_id, patients(user_id, name)')
+    .eq('session_id', sessionId)
+    .neq('status', 'cancelled');
+
+  if (appointments && appointments.length > 0) {
+    const apptIds = appointments.map(a => a.appointment_id);
+    const paymentIds = appointments.map(a => a.payment_id).filter(Boolean);
+
+    // Cancel appointments
+    await supabaseAdmin
+      .from('appointments')
+      .update({ status: 'cancelled' })
+      .in('appointment_id', apptIds);
+
+    // Refund payments
+    if (paymentIds.length > 0) {
+      await supabaseAdmin
+        .from('payments')
+        .update({ payment_status: 'refunded' })
+        .in('payment_id', paymentIds);
+    }
+
+    // Notify patients
+    for (const appt of appointments) {
+      if (appt.patients?.user_id) {
+        await notificationsService.createNotification({
+          userId: appt.patients.user_id,
+          title: 'Session Cancelled',
+          body: `Dr. ${doctor.name}'s session on ${session.date} has been cancelled. Reason: ${reason}. You will be refunded.`,
+          type: 'session_cancelled',
+          relatedId: sessionId,
+        });
+      }
+    }
+  }
+
+  // 5. Notify Center Admin
+  const centerId = session.rooms?.center_id;
+  if (centerId) {
+    const { data: centerAdmins } = await supabaseAdmin
+      .from('center_admins')
+      .select('user_id')
+      .eq('center_id', centerId);
+
+    if (centerAdmins) {
+      for (const admin of centerAdmins) {
+        await notificationsService.createNotification({
+          userId: admin.user_id,
+          title: 'Doctor Cancelled Session',
+          body: `Dr. ${doctor.name} cancelled their session on ${session.date}. Reason: ${reason}. Patients have been notified and refunded.`,
+          type: 'session_cancelled',
+          relatedId: sessionId,
+        });
+      }
+    }
+  }
+
+  // 6. Log it
+  await supabaseAdmin.from('system_logs').insert({
+    action: 'doctor_cancelled_session',
+    description: `Doctor ${doctor.name} cancelled session ${sessionId}. Reason: ${reason}`,
+    performed_by: userId,
+  });
+
+  return updatedSession;
+};
+
+module.exports = { createSession, getCenterSessions, getSessionDetail, updateSession, getAvailableSessions, cancelSessionByDoctor };

@@ -16,4 +16,7 @@ router.get('/center/:centerId', requireAuth, requireRole('center_admin'), c.getC
 router.post('/center/:centerId', requireAuth, requireRole('center_admin'), c.createSession);
 router.patch('/center/:centerId/:sessionId', requireAuth, requireRole('center_admin'), c.updateSession);
 
+// Protected — doctor
+router.post('/:sessionId/cancel-by-doctor', requireAuth, requireRole('doctor'), c.cancelSessionByDoctor);
+
 module.exports = router;
