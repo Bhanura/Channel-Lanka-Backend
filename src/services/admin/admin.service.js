@@ -11,7 +11,7 @@ const notificationsService = require('../notifications/notifications.service');
 const getAllDoctors = async ({ status, page = 1, limit = 20 }) => {
   const from = (page - 1) * limit;
   let query = supabaseAdmin.from('doctors')
-    .select('*, users(email)', { count: 'exact' });
+    .select('*, users!doctors_user_id_fkey(email)', { count: 'exact' });
   if (status) query = query.eq('verification_status', status);
   const { data, count, error } = await query.order('created_at', { ascending: false }).range(from, from + limit - 1);
   if (error) throw { statusCode: 500, message: error.message };
@@ -23,7 +23,7 @@ const verifyDoctor = async (adminUserId, doctorId, { status, reason }) => {
     .from('doctors')
     .update({ verification_status: status, verified_by: adminUserId })
     .eq('doctor_id', doctorId)
-    .select('*, users(user_id)')
+    .select('*, users!doctors_user_id_fkey(user_id)')
     .single();
 
   if (error) throw { statusCode: 500, message: error.message };
@@ -155,7 +155,7 @@ const getAllAppointments = async ({ page = 1, limit = 20 }) => {
   const from = (page - 1) * limit;
   const { data, count, error } = await supabaseAdmin
     .from('appointments')
-    .select('*, channel_sessions(date, start_time, doctors(name)), patients(name), payments(total_amount)', { count: 'exact' })
+    .select('*, channel_sessions(date, start_time, doctors(name)), patients(name), payments!appointments_payment_id_fkey(total_amount)', { count: 'exact' })
     .order('created_at', { ascending: false })
     .range(from, from + limit - 1);
   if (error) throw { statusCode: 500, message: error.message };

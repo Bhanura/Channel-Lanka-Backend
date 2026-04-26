@@ -50,7 +50,7 @@ const getAppointments = async (userId) => {
         doctors ( name, specialization, avatar_url ),
         rooms ( name, channeling_centers ( name, location ) )
       ),
-      payments ( total_amount, payment_status )
+      payments!appointments_payment_id_fkey ( total_amount, payment_status )
     `)
     .eq('patient_id', patient.patient_id)
     .order('created_at', { ascending: false });

@@ -103,7 +103,7 @@ const sendDoctorRequest = async (userId, centerId, { doctorId, offerDetails }) =
 const getDoctorRequests = async (centerId) => {
   const { data, error } = await supabaseAdmin
     .from('doctor_requests')
-    .select('*, doctors(name, specialization, avatar_url)')
+    .select('*, doctors!doctor_requests_doctor_id_fkey(name, specialization, avatar_url)')
     .eq('center_id', centerId)
     .order('created_at', { ascending: false });
   if (error) throw { statusCode: 500, message: error.message };
@@ -138,7 +138,7 @@ const getStaff = async (userId, centerId) => {
   await assertCenterAdmin(userId, centerId);
   const { data, error } = await supabaseAdmin
     .from('center_admins')
-    .select('*, users(email)')
+    .select('*, users!center_admins_user_id_fkey(email)')
     .eq('center_id', centerId);
   if (error) throw { statusCode: 500, message: error.message };
   return data;
@@ -168,7 +168,7 @@ const addStaff = async (userId, centerId, { email, centerRole }) => {
 const getPayments = async (centerId) => {
   const { data, error } = await supabaseAdmin
     .from('payments')
-    .select('*, appointments(appointment_number, status, channel_sessions(date, doctors(name)))')
+    .select('*, appointments!fk_payments_appointment(appointment_number, status, channel_sessions(date, doctors(name)))')
     .in('appointments.session_id',
       (await supabaseAdmin.from('channel_sessions')
         .select('session_id')

@@ -118,7 +118,7 @@ const getAllPayments = async ({ page = 1, limit = 20 }) => {
   const from = (page - 1) * limit;
   const { data, count, error } = await supabaseAdmin
     .from('payments')
-    .select('*, appointments(appointment_number, status, patients(name), channel_sessions(date, doctors(name)))', { count: 'exact' })
+    .select('*, appointments!fk_payments_appointment(appointment_number, status, patients(name), channel_sessions(date, doctors(name)))', { count: 'exact' })
     .order('created_at', { ascending: false })
     .range(from, from + limit - 1);
 

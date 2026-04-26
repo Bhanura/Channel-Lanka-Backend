@@ -121,7 +121,7 @@ const getAppointmentById = async (appointmentId) => {
     .select(`
       *,
       channel_sessions(date, start_time, end_time, doctor_fee, doctors(name, specialization), rooms(name, charge, channeling_centers(name, location))),
-      payments(*)
+      payments!appointments_payment_id_fkey(*)
     `)
     .eq('appointment_id', appointmentId)
     .single();
@@ -156,7 +156,7 @@ const cancelAppointment = async (userId, appointmentId) => {
 const getSessionAppointments = async (sessionId) => {
   const { data, error } = await supabaseAdmin
     .from('appointments')
-    .select('*, patients(name, phone, gender), payments(total_amount, payment_status)')
+    .select('*, patients(name, phone, gender), payments!appointments_payment_id_fkey(total_amount, payment_status)')
     .eq('session_id', sessionId)
     .order('appointment_number');
   if (error) throw { statusCode: 500, message: error.message };
