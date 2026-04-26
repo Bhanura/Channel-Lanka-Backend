@@ -163,4 +163,34 @@ const getSessionAppointments = async (sessionId) => {
   return data;
 };
 
-module.exports = { bookAppointment, getAppointmentById, cancelAppointment, getSessionAppointments };
+/** Update appointment status (for queue management) */
+const updateAppointmentStatus = async (userId, appointmentId, status) => {
+  const { data: appt } = await supabaseAdmin
+    .from('appointments')
+    .select('*, channel_sessions(doctor_id, rooms(center_id))')
+    .eq('appointment_id', appointmentId)
+    .single();
+
+  if (!appt) throw { statusCode: 404, message: 'Appointment not found' };
+
+  const [{ data: doctor }, { data: admin }] = await Promise.all([
+    supabaseAdmin.from('doctors').select('doctor_id').eq('user_id', userId).maybeSingle(),
+    supabaseAdmin.from('center_admins').select('id').eq('user_id', userId).eq('center_id', appt.channel_sessions.rooms.center_id).maybeSingle()
+  ]);
+
+  if ((!doctor || doctor.doctor_id !== appt.channel_sessions.doctor_id) && !admin) {
+    throw { statusCode: 403, message: 'Not authorized to update this appointment' };
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from('appointments')
+    .update({ status })
+    .eq('appointment_id', appointmentId)
+    .select()
+    .single();
+
+  if (error) throw { statusCode: 500, message: error.message };
+  return data;
+};
+
+module.exports = { bookAppointment, getAppointmentById, cancelAppointment, getSessionAppointments, updateAppointmentStatus };

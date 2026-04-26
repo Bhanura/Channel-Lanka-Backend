@@ -104,8 +104,8 @@ const getAvailableSessions = async ({ doctorId, centerId, date, specialization }
     .from('channel_sessions')
     .select(`
       *,
-      doctors ( name, specialization, avatar_url ),
-      rooms ( name, charge, channeling_centers ( name, location ) ),
+      doctors!inner ( name, specialization, avatar_url ),
+      rooms!inner ( name, charge, channeling_centers!inner ( center_id, name, location ) ),
       appointments ( count )
     `)
     .eq('status', 'scheduled')
@@ -113,18 +113,17 @@ const getAvailableSessions = async ({ doctorId, centerId, date, specialization }
 
   if (doctorId) query = query.eq('doctor_id', doctorId);
   if (date) query = query.eq('date', date);
+  if (centerId) query = query.eq('rooms.center_id', centerId);
+  if (specialization) query = query.eq('doctors.specialization', specialization);
 
   const { data, error } = await query.order('date');
   if (error) throw { statusCode: 500, message: error.message };
 
-  // Filter by center and add availability info
-  return data
-    .filter(s => !centerId || s.rooms?.channeling_centers?.center_id === centerId)
-    .map(s => ({
-      ...s,
-      booked_count: s.appointments?.[0]?.count || 0,
-      is_full: (s.appointments?.[0]?.count || 0) >= s.patient_limit,
-    }));
+  return data.map(s => ({
+    ...s,
+    booked_count: s.appointments?.[0]?.count || 0,
+    is_full: (s.appointments?.[0]?.count || 0) >= s.patient_limit,
+  }));
 };
 
 /** Cancel session by doctor */

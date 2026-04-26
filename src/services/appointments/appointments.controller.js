@@ -29,4 +29,12 @@ const getSessionAppointments = async (req, res, next) => {
   catch (e) { next(e); }
 };
 
-module.exports = { bookAppointment, getAppointmentById, cancelAppointment, getSessionAppointments };
+const updateAppointmentStatus = async (req, res, next) => {
+  try {
+    const { status } = req.body;
+    if (!status) throw { statusCode: 400, message: 'Status is required' };
+    res.json({ message: 'Appointment status updated', data: await svc.updateAppointmentStatus(req.user.user_id, req.params.id, status) });
+  } catch (e) { next(e); }
+};
+
+module.exports = { bookAppointment, getAppointmentById, cancelAppointment, getSessionAppointments, updateAppointmentStatus };

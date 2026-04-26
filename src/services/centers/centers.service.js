@@ -145,22 +145,65 @@ const getStaff = async (userId, centerId) => {
 };
 
 /** Add a sub-admin to the center */
-const addStaff = async (userId, centerId, { email, centerRole }) => {
+const addStaff = async (userId, centerId, { email, password, role }) => {
   // Only owner can add staff
   const adminRecord = await getCenterAdminRecord(userId, centerId);
   if (adminRecord.center_role !== 'owner') throw { statusCode: 403, message: 'Only the owner can add staff' };
 
-  // Find the user by email
-  const { data: targetUser } = await supabaseAdmin
-    .from('users').select('user_id').eq('email', email).single();
-  if (!targetUser) throw { statusCode: 404, message: 'User not found. They must register first.' };
+  // 1. Check if user already exists in public.users
+  let { data: targetUser } = await supabaseAdmin
+    .from('users').select('user_id, role').eq('email', email).maybeSingle();
 
+  if (!targetUser) {
+    // 2. If not, create a new auth user using provided password
+    if (!password) throw { statusCode: 400, message: 'Password is required for new accounts' };
+
+    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: { role: 'center_admin' },
+    });
+
+    if (authError) {
+      throw { statusCode: 400, message: `Auth error: ${authError.message}` };
+    }
+
+    const newUserId = authData.user.id;
+
+    // 3. Insert into public.users
+    const { error: userError } = await supabaseAdmin
+      .from('users').insert({ user_id: newUserId, email, role: 'center_admin' });
+    
+    if (userError) throw { statusCode: 500, message: `Failed to mirror user: ${userError.message}` };
+    
+    targetUser = { user_id: newUserId, role: 'center_admin' };
+  } else if (targetUser.role !== 'center_admin') {
+    // 4. If user exists but is not a center_admin (e.g. they were a patient), 
+    // update their role so they can access the center dashboard.
+    const { error: updateError } = await supabaseAdmin
+      .from('users').update({ role: 'center_admin' }).eq('user_id', targetUser.user_id);
+    
+    if (updateError) throw { statusCode: 500, message: `Failed to update user role: ${updateError.message}` };
+  }
+
+  // 5. Add as center admin
   const { data, error } = await supabaseAdmin
     .from('center_admins')
-    .insert({ center_id: centerId, user_id: targetUser.user_id, center_role: centerRole, added_by: userId })
+    .insert({ 
+      center_id: centerId, 
+      user_id: targetUser.user_id, 
+      center_role: role || 'staff', 
+      added_by: userId 
+    })
     .select()
     .single();
-  if (error) throw { statusCode: 400, message: error.message };
+
+  if (error) {
+    if (error.code === '23505') throw { statusCode: 400, message: 'User is already a staff member of this center' };
+    throw { statusCode: 500, message: error.message };
+  }
+  
   return data;
 };
 

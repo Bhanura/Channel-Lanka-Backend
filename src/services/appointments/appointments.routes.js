@@ -14,7 +14,10 @@ router.post('/book', optionalAuth, c.bookAppointment);
 router.get('/:id', requireAuth, c.getAppointmentById);
 router.patch('/:id/cancel', requireAuth, requireRole('patient'), c.cancelAppointment);
 
-// Center admin — view session appointments
-router.get('/session/:sessionId', requireAuth, requireRole('center_admin'), c.getSessionAppointments);
+// Center admin and doctor — view session appointments
+router.get('/session/:sessionId', requireAuth, requireRole(['center_admin', 'doctor']), c.getSessionAppointments);
+
+// Doctor or Center admin — update appointment status
+router.patch('/:id/status', requireAuth, c.updateAppointmentStatus);
 
 module.exports = router;
