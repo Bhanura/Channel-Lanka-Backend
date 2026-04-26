@@ -89,7 +89,11 @@ const getRegisteredCenters = async (userId) => {
 /** Doctor sends a request to a channeling center */
 const sendCenterRequest = async (userId, { centerId, offerDetails }) => {
   const { data: doctor } = await supabaseAdmin
-    .from('doctors').select('doctor_id').eq('user_id', userId).single();
+    .from('doctors').select('doctor_id, verification_status').eq('user_id', userId).single();
+
+  if (doctor.verification_status !== 'approved') {
+    throw { statusCode: 403, message: 'Your account must be approved by an administrator before you can request centers.' };
+  }
 
   // Check no duplicate pending request
   const { data: existing } = await supabaseAdmin
@@ -137,7 +141,11 @@ const getRequests = async (userId) => {
 /** Doctor responds to a center-initiated request */
 const respondToRequest = async (userId, requestId, status) => {
   const { data: doctor } = await supabaseAdmin
-    .from('doctors').select('doctor_id').eq('user_id', userId).single();
+    .from('doctors').select('doctor_id, verification_status').eq('user_id', userId).single();
+
+  if (doctor.verification_status !== 'approved') {
+    throw { statusCode: 403, message: 'Your account must be approved by an administrator before you can respond to requests.' };
+  }
 
   const { data: req } = await supabaseAdmin
     .from('doctor_requests').select('*').eq('id', requestId).single();
